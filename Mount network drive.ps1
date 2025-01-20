@@ -252,12 +252,12 @@ Process {
 
             $isDriveMounted = Test-isDriveMountedHC -Drive $drive
 
-            if ($isDriveMounted) {
-                $M = 'Drive mounted again'
+            if ($isDriveMounted.isMounted) {
+                $M = 'Drive mounted'
                 Write-Verbose $M; $logFileMessages += $M
             }
             else {
-                throw 'Failed to remount drive'
+                throw "Failed to mount drive: $($isDriveMounted.reason)"
             }
             #endregion
         }
