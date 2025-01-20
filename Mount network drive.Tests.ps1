@@ -133,10 +133,10 @@ Describe 'when no drive is mounted' {
         Should -Invoke Out-File -Exactly 1 -Scope Describe -ParameterFilter {
             $InputObject -like "*Mount drive '$($testInputFile.Mount[0].DriveLetter)' to '$($testInputFile.Mount[0].SmbSharePath)'*"
         }
-    }  -Tag test
+    }
 }
 Describe 'when the drive is mounted' {
-    It 'do not mount the drive again' {
+    BeforeAll {
         Mock Get-WmiObject {
             @{
                 VolumeName   = 'SharedDrive'
@@ -154,7 +154,11 @@ Describe 'when the drive is mounted' {
         )
 
         .$testScript @testParams
-
-        Should -Not -Invoke New-PSDrive
     }
-}
+    It 'do not mount the drive again' {
+        Should -Not -Invoke New-PSDrive -Scope Describe
+    }
+    It 'do not create a log file' {
+        Should -Not -Invoke Out-File -Scope Describe
+    }
+}  -Tag test
