@@ -5,19 +5,19 @@
 
     .DESCRIPTION
         This script is intended to run as a scheduled task that will run every
-        x minutes. When a drive is no longer mapped an attempt is made to map
+        x minutes. When a drive is no longer mounted an attempt is made to mount
         the drive again.
 
-        When a drive is mapped again or fails to map, a log file is created.
+        When a drive is mounted again or fails to mount, a log file is created.
 
     .PARAMETER ImportFile
         A .JSON file that contains all the parameters used by the script.
 
     .PARAMETER DriveLetter
-        The letter to use for mapping the drive.
+        Drive letter to mount the drive.
 
     .PARAMETER SmbSharePath
-        Network path to the folder to map.
+        Network path to the folder.
 
     .PARAMETER LogFolder
         Path to the log folder
