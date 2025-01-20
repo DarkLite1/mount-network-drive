@@ -80,7 +80,9 @@ Begin {
                 }
             }
 
-            $true
+            return @{
+                isMounted = $true
+            }
         }
         catch {
             throw "Failed testing if drive is mounted: $_"
@@ -182,23 +184,26 @@ Process {
         try {
             $logFileMessages = @()
 
+            $DriveLetter = $mount.DriveLetter
+            $SmbSharePath = $mount.SmbSharePath
+
             $drive = Get-WmiObject -Class 'Win32_LogicalDisk' | Where-Object {
-                $_.DeviceID -eq $mount.DriveLetter
+                $_.DeviceID -eq $DriveLetter
             }
 
             if ($drive -and ($drive.DriveType -ne 4)) {
-                throw "Drive letter '$($mount.DriveLetter)' is already in use by drive '$($drive.VolumeName)' of DriveType '$($drive.DriveType)'. This is not a network drive."
+                throw "Drive letter '$DriveLetter' is already in use by drive '$($drive.VolumeName)' of DriveType '$($drive.DriveType)'. This is not a network drive."
             }
 
             $params = @{
                 Drive        = $drive
-                DriveLetter  = $mount.DriveLetter
-                SmbSharePath = $mount.SmbSharePath
+                DriveLetter  = $DriveLetter
+                SmbSharePath = $SmbSharePath
             }
             $isDriveMounted = Test-isDriveMountedHC @params
 
             if ($isDriveMounted.isMounted) {
-                Write-Verbose "Drive '$($mount.DriveLetter)' is mounted"
+                Write-Verbose "Drive '$DriveLetter' is mounted"
                 Continue
             }
 
@@ -250,7 +255,12 @@ Process {
             $drive = Get-WmiObject -Class 'Win32_LogicalDisk' |
             Where-Object { $_.DeviceID -eq $DriveLetter }
 
-            $isDriveMounted = Test-isDriveMountedHC -Drive $drive
+            $params = @{
+                Drive        = $drive
+                DriveLetter  = $DriveLetter
+                SmbSharePath = $SmbSharePath
+            }
+            $isDriveMounted = Test-isDriveMountedHC @params
 
             if ($isDriveMounted.isMounted) {
                 $M = 'Drive mounted'
@@ -271,8 +281,8 @@ Process {
 
                 $header = @(
                     $('-' * 30),
-                    "- DriveLetter  : '$($mount.DriveLetter)'",
-                    "- SmbSharePath : '$($mount.SmbSharePath)'",
+                    "- DriveLetter  : '$DriveLetter'",
+                    "- SmbSharePath : '$SmbSharePath'",
                     $('-' * 30)
                 )
 

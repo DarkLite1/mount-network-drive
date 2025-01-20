@@ -108,10 +108,36 @@ Describe 'create a log file with an error line when' {
         Should -Invoke Out-File -Exactly 1 -ParameterFilter {
             $InputObject -like "*Drive letter '$($testInputFile.Mount[0].DriveLetter)' is already in use by drive 'CD Rom' of DriveType '5'. This is not a network drive*"
         }
-    } -Tag test
+    }
 }
 Describe 'when no drive is mounted' {
     It 'mount the drive' {
+        Mock Get-WmiObject {
+            # @{
+            #     VolumeName   = 'SharedDrive'
+            #     DeviceID     = $testInputFile.Mount[0].DriveLetter
+            #     DriveType    = 4
+            #     ProviderName = $testInputFile.Mount[0].SmbSharePath
+            # }
+        }
+
+        & $realCmdLet.OutFile @testOutParams -InputObject (
+            $testInputFile | ConvertTo-Json -Depth 7
+        )
+
+        .$testScript @testParams
+
+        Should -Invoke New-PSDrive -Exactly -Times 1 -ParameterFilter {
+            ($Name -eq $testInputFile.Mount[0].DriveLetter.TrimEnd(':')) -and
+            ($Root -eq $testInputFile.Mount[0].SmbSharePath) -and
+            ($PSProvider -eq 'FileSystem') -and
+            ($Scope -eq 'Global') -and
+            ($Persist -eq $true)
+        }
+    }
+}
+Describe 'when the drive is mounted' {
+    It 'do not mount the drive again' {
         Mock Get-WmiObject {
             @{
                 VolumeName   = 'SharedDrive'
@@ -120,5 +146,16 @@ Describe 'when no drive is mounted' {
                 ProviderName = $testInputFile.Mount[0].SmbSharePath
             }
         }
-    }
+        Mock Test-Path {
+            $true
+        }
+
+        & $realCmdLet.OutFile @testOutParams -InputObject (
+            $testInputFile | ConvertTo-Json -Depth 7
+        )
+
+        .$testScript @testParams
+
+        Should -Not -Invoke New-PSDrive
+    } -Tag test
 }
