@@ -1,0 +1,8 @@
+{
+  "Mount": [
+    {
+      "DriveLetter": "Z:",
+      "SmbSharePath": "\\\\10.10.10.1\\Documents"
+    }
+  ]
+}

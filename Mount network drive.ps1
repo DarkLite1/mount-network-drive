@@ -1,0 +1,250 @@
+﻿
+<#
+    .SYNOPSIS
+        Mount a network drive on the local client.
+
+    .DESCRIPTION
+        This script is intended to run as a scheduled task that will run every
+        x minutes. When a drive is no longer mapped an attempt is made to map
+        the drive again.
+
+        When a drive is mapped again or fails to map, a log file is created.
+
+    .PARAMETER ImportFile
+        A .JSON file that contains all the parameters used by the script.
+
+    .PARAMETER DriveLetter
+        The letter to use for mapping the drive.
+
+    .PARAMETER SmbSharePath
+        Network path to the folder to map.
+
+    .PARAMETER LogFolder
+        Path to the log folder
+
+    .EXAMPLE
+        . 'Mount network drive\Mount network drive.ps1' -DriveLetter 'T:' -SmbSharePath '\\10.10.1.1\documents'
+#>
+
+[CmdLetBinding()]
+Param (
+    [parameter(Mandatory)]
+    [String]$ImportFile,
+    [String]$ScriptName = 'Mount network drive',
+    [String]$LogFolder = "$PSScriptRoot\Log"
+)
+
+Begin {
+    $ErrorActionPreference = 'Stop'
+
+    $logFileMessages = @()
+
+    Function Test-isDriveMountedHC {
+        [CmdLetBinding()]
+        Param (
+            [parameter(Mandatory)]
+            [String]$DriveLetter,
+            [parameter(Mandatory)]
+            [String]$SmbSharePath,
+            $Drive
+        )
+
+        try {
+            Write-Verbose 'Test if drive is mapped'
+
+            if (-not $Drive) {
+                Write-Verbose 'No logical disk found with drive letter'
+                return $false
+            }
+
+            if (-not ($Drive.ProviderName -ne $SmbSharePath)) {
+                Write-Verbose "Logical disk ProviderName '$($Drive.ProviderName)' not matching SmbSharePath '$SmbSharePath'"
+                return $false
+            }
+
+            if (-not (Test-Path $DriveLetter)) {
+                Write-Verbose "Drive letter '$DriveLetter' not available"
+                return $false
+            }
+
+            if (-not (Test-Path $SmbSharePath)) {
+                Write-Verbose "Network path '$SmbSharePath' not available"
+                return $false
+            }
+
+            $true
+        }
+        catch {
+            throw "Failed testing if drive is mapped: $_"
+        }
+    }
+
+    #region Create log folder
+    try {
+        $params = @{
+            Path        = $LogFolder
+            ItemType    = 'Directory'
+            Force       = $true
+            ErrorAction = 'Stop'
+        }
+        $logFolderItem = New-Item @params
+
+        $logFilePath = '{0}\{1} - {2} - log.txt' -f
+        $logFolderItem.FullName,
+        $((Get-Date).ToString('yyyyMMdd HHmmss')),
+        $ScriptName
+
+        Write-Verbose "log file path '$logFilePath'"
+    }
+    Catch {
+        throw "Failed creating the log folder '$LogFolder': $_"
+    }
+    #endregion
+
+    $outFileParams = @{
+        FilePath = $logFilePath
+        Append   = $true
+    }
+
+    try {
+        #region Import .json file
+        try {
+            $M = "Import .json file '$ImportFile'"
+            Write-Verbose $M; $logFileMessages += $M
+
+            $params = @{
+                LiteralPath = $ImportFile
+                Raw         = $true
+                Encoding    = 'UTF8'
+            }
+            $jsonFileContent = Get-Content @params | ConvertFrom-Json
+        }
+        catch {
+            throw "Failed to import file '$ImportFile': $_"
+        }
+        #endregion
+
+        #region Test .json file properties
+        Write-Verbose 'Test .json file properties'
+
+        try {
+            @(
+                'Mount'
+            ).where(
+                { -not $jsonFileContent.$_ }
+            ).foreach(
+                { throw "Property '$_' not found" }
+            )
+
+            $Mounts = $jsonFileContent.Mount
+
+            foreach ($mount in $Mounts) {
+                @(
+                    'DriveLetter', 'SmbSharePath'
+                ).where(
+                    { -not $mount.$_ }
+                ).foreach(
+                    { throw "Property 'Mount.$_' not found" }
+                )
+            }
+
+            #region Test unique DriveLetter
+            $Mounts.DriveLetter | Group-Object | Where-Object {
+                $_.Count -gt 1
+            } | ForEach-Object {
+                throw "Property 'Mount.DriveLetter' with value '$($_.Name)' is not unique. Each drive letter needs to be unique."
+            }
+            #endregion
+        }
+        catch {
+            throw "Input file '$ImportFile': $_"
+        }
+        #endregion
+    }
+    catch {
+        $M = "ERROR: $_"
+        Write-Warning $M; $logFileMessages += $M
+        Out-File @outFileParams -InputObject $logFileMessages
+        exit
+    }
+}
+
+Process {
+    foreach ($mount in $Mounts) {
+        try {
+            $drive = Get-WmiObject -Class 'Win32_LogicalDisk' | Where-Object {
+                $_.DeviceID -eq $mount.DriveLetter
+            }
+
+            if ($drive -and ($drive.DriveType -ne 4)) {
+                throw "Drive letter '$DriveLetter' is already in use by drive '$($drive.Name)' of DriveType '$($drive.DriveType)'. This is not a network drive."
+            }
+
+            $params = @{
+                Drive        = $drive
+                DriveLetter  = $mount.DriveLetter
+                SmbSharePath = $mount.SmbSharePath
+            }
+            $isDriveMounted = Test-isDriveMountedHC @params
+
+            if ($isDriveMounted) {
+                Write-Verbose "Drive '$($mount.DriveLetter)' is mounted"
+                Continue
+            }
+
+            $M = "Drive letter '$($mount.DriveLetter)' with path '$($mount.SmbSharePath)' is not mounted correctly"
+            Write-Verbose $M; $M | Out-File @outFileParams
+
+            #region Remove existing drive mapping
+            if ($drive) {
+                try {
+                    $M = 'Remove existing drive'
+                    Write-Verbose $M; $M | Out-File @outFileParams
+
+                    Remove-PSDrive -Name $DriveLetter.TrimEnd(':') -Force
+                }
+                catch {
+                    throw "Failed to remove mapped drive '$DriveLetter': $_"
+                }
+            }
+            #endregion
+
+            #region Map the drive
+            try {
+                Write-Verbose "Map drive '$DriveLetter' to '$SmbSharePath'"
+
+                $params = @{
+                    Name       = $DriveLetter.TrimEnd(':')
+                    PSProvider = 'FileSystem'
+                    Scope      = 'Global'
+                    Root       = $SmbSharePath
+                    Persist    = $true
+                }
+                New-PSDrive @params
+            }
+            catch {
+                throw "Failed to map drive '$DriveLetter': $_"
+            }
+            #endregion
+
+            #region Test drive mapping
+            $drive = Get-WmiObject -Class 'Win32_LogicalDisk' |
+            Where-Object { $_.DeviceID -eq $DriveLetter }
+
+            $isDriveMounted = Test-isDriveMountedHC -Drive $drive
+
+            if ($isDriveMounted) {
+                Write-Verbose 'Drive mounted again'
+            }
+            else {
+                throw 'Failed to remount drive'
+            }
+            #endregion
+        }
+        catch {
+            $M = "ERROR: $_"
+            Write-Warning $M; $logFileMessages += $M
+            Out-File @outFileParams -InputObject $logFileMessages
+        }
+    }
+}
