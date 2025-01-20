@@ -291,6 +291,8 @@ Process {
                 $header = @(
                     '', "$('_' * 15)  $ScriptName $('_' * 15) ", '',
                     "- DateTime     : '$(($date).ToString('dd/MM/yyyy HH:mm:ss'))'",
+                    "- ImportFile   : '$ImportFile'",
+                    "- ScriptFile   : '$PSCommandPath'",
                     "- DriveLetter  : '$DriveLetter'",
                     "- SmbSharePath : '$SmbSharePath'",
                     $('_' * 52), ''
