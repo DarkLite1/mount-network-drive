@@ -50,32 +50,40 @@ Begin {
         )
 
         try {
-            Write-Verbose 'Test if drive is mapped'
+            Write-Verbose 'Test if drive is mounted'
 
             if (-not $Drive) {
-                Write-Verbose 'No logical disk found with drive letter'
-                return $false
+                return @{
+                    isMounted = $false
+                    reason    = "No logical disk found with drive letter '$DriveLetter'"
+                }
             }
 
             if (-not ($Drive.ProviderName -ne $SmbSharePath)) {
-                Write-Verbose "Logical disk ProviderName '$($Drive.ProviderName)' not matching SmbSharePath '$SmbSharePath'"
-                return $false
+                return @{
+                    isMounted = $false
+                    reason    = "Logical disk ProviderName '$($Drive.ProviderName)' does not match SmbSharePath '$SmbSharePath'"
+                }
             }
 
             if (-not (Test-Path $DriveLetter)) {
-                Write-Verbose "Drive letter '$DriveLetter' not available"
-                return $false
+                return @{
+                    isMounted = $false
+                    reason    = "Drive letter '$DriveLetter' does not exist"
+                }
             }
 
             if (-not (Test-Path $SmbSharePath)) {
-                Write-Verbose "Network path '$SmbSharePath' not available"
-                return $false
+                return @{
+                    isMounted = $false
+                    reason    = "Network path '$SmbSharePath' does not exist"
+                }
             }
 
             $true
         }
         catch {
-            throw "Failed testing if drive is mapped: $_"
+            throw "Failed testing if drive is mounted: $_"
         }
     }
 
@@ -187,13 +195,20 @@ Process {
             }
             $isDriveMounted = Test-isDriveMountedHC @params
 
-            if ($isDriveMounted) {
+            if ($isDriveMounted.isMounted) {
                 Write-Verbose "Drive '$($mount.DriveLetter)' is mounted"
                 Continue
             }
 
-            $M = "Drive letter '$($mount.DriveLetter)' with path '$($mount.SmbSharePath)' is not mounted correctly"
-            Write-Verbose $M; $M | Out-File @outFileParams
+            $M = @(
+                $('-' * 30),
+                "- DriveLetter  : '$($mount.DriveLetter)'",
+                "- SmbSharePath : '$($mount.SmbSharePath)'",
+                $('-' * 30),
+                'Not mounted correctly'
+                $isDriveMounted.reason
+            )
+            Write-Verbose $M; Out-File @outFileParams -InputObject $M
 
             #region Remove existing drive mapping
             if ($drive) {
