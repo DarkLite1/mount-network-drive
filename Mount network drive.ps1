@@ -187,7 +187,7 @@ Process {
             }
 
             if ($drive -and ($drive.DriveType -ne 4)) {
-                throw "Drive letter '$($mount.DriveLetter)' is already in use by drive '$($drive.Name)' of DriveType '$($drive.DriveType)'. This is not a network drive."
+                throw "Drive letter '$($mount.DriveLetter)' is already in use by drive '$($drive.VolumeName)' of DriveType '$($drive.DriveType)'. This is not a network drive."
             }
 
             $params = @{

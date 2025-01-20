@@ -93,9 +93,9 @@ Describe 'create a log file with an error line when' {
     It 'DriveLetter is already in use by a non network drive' {
         Mock Get-WmiObject {
             @{
-                Name      = 'CD Rom'
-                DeviceID  = $testInputFile.Mount[0].DriveLetter
-                DriveType = 5
+                VolumeName = 'CD Rom'
+                DeviceID   = $testInputFile.Mount[0].DriveLetter
+                DriveType  = 5
             }
         }
 
@@ -114,9 +114,10 @@ Describe 'when no drive is mounted' {
     It 'mount the drive' {
         Mock Get-WmiObject {
             @{
-                Name      = 'CD Rom'
-                DeviceID  = $testInputFile.Mount[0].DriveLetter
-                DriveType = 4
+                VolumeName   = 'SharedDrive'
+                DeviceID     = $testInputFile.Mount[0].DriveLetter
+                DriveType    = 4
+                ProviderName = $testInputFile.Mount[0].SmbSharePath
             }
         }
     }
