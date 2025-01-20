@@ -191,6 +191,7 @@ Begin {
         Write-Verbose 'Test .json file properties'
 
         try {
+            #region Missing properties
             @(
                 'Mount'
             ).where(
@@ -208,6 +209,7 @@ Begin {
                     { throw "Property 'Mount.$_' not found" }
                 )
             }
+            #endregion
 
             #region Test unique DriveLetter
             $Mounts.DriveLetter | Group-Object | Where-Object {
