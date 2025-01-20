@@ -43,7 +43,7 @@ Describe 'when the script is executed' {
         $testParams.LogFolder | Should -Exist
     }
 }
-Describe 'create a log file with error line when' {
+Describe 'create a log file when' {
     Context 'the ImportFile' {
         It 'is not found' {
             $testNewParams = Copy-ObjectHC $testParams
@@ -90,6 +90,11 @@ Describe 'create a log file with error line when' {
             }
         }
     }
+    Context 'the drive' {
+        It 'is not mapped' {
+
+        }
+    } -Tag test
 }
 
 

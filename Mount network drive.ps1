@@ -180,6 +180,8 @@ Begin {
 Process {
     foreach ($mount in $Mounts) {
         try {
+            $logFileMessages = @()
+
             $drive = Get-WmiObject -Class 'Win32_LogicalDisk' | Where-Object {
                 $_.DeviceID -eq $mount.DriveLetter
             }
@@ -200,33 +202,32 @@ Process {
                 Continue
             }
 
-            $M = @(
-                $('-' * 30),
-                "- DriveLetter  : '$($mount.DriveLetter)'",
-                "- SmbSharePath : '$($mount.SmbSharePath)'",
-                $('-' * 30),
-                'Not mounted correctly'
-                $isDriveMounted.reason
-            )
-            Write-Verbose $M; Out-File @outFileParams -InputObject $M
+            #region Verbose
+            $M = 'Drive not mounted'
+            Write-Verbose $M; $logFileMessages += $M
+
+            $M = $isDriveMounted.reason
+            Write-Verbose $M; $logFileMessages += $M
+            #endregion
 
             #region Remove existing drive mapping
             if ($drive) {
                 try {
                     $M = 'Remove existing drive'
-                    Write-Verbose $M; $M | Out-File @outFileParams
+                    Write-Verbose $M; $logFileMessages += $M
 
                     Remove-PSDrive -Name $DriveLetter.TrimEnd(':') -Force
                 }
                 catch {
-                    throw "Failed to remove mapped drive '$DriveLetter': $_"
+                    throw "Failed to remove mounted drive '$DriveLetter': $_"
                 }
             }
             #endregion
 
-            #region Map the drive
+            #region Mount drive
             try {
-                Write-Verbose "Map drive '$DriveLetter' to '$SmbSharePath'"
+                $M = "Mount drive '$DriveLetter' to '$SmbSharePath'"
+                Write-Verbose $M; $logFileMessages += $M
 
                 $params = @{
                     Name       = $DriveLetter.TrimEnd(':')
@@ -242,14 +243,18 @@ Process {
             }
             #endregion
 
-            #region Test drive mapping
+            #region Test drive mounted
+            $M = 'Test drive mounted'
+            Write-Verbose $M; $logFileMessages += $M
+
             $drive = Get-WmiObject -Class 'Win32_LogicalDisk' |
             Where-Object { $_.DeviceID -eq $DriveLetter }
 
             $isDriveMounted = Test-isDriveMountedHC -Drive $drive
 
             if ($isDriveMounted) {
-                Write-Verbose 'Drive mounted again'
+                $M = 'Drive mounted again'
+                Write-Verbose $M; $logFileMessages += $M
             }
             else {
                 throw 'Failed to remount drive'
@@ -257,9 +262,25 @@ Process {
             #endregion
         }
         catch {
-            $M = "ERROR: $_"
-            Write-Warning $M; $logFileMessages += $M
-            Out-File @outFileParams -InputObject $logFileMessages
+            $M = "ERROR: $_"; Write-Warning $M; $logFileMessages += $M
+        }
+        finally {
+            #region Create log file
+            if ($logFileMessages) {
+                Write-Verbose 'Create log file'
+
+                $header = @(
+                    $('-' * 30),
+                    "- DriveLetter  : '$($mount.DriveLetter)'",
+                    "- SmbSharePath : '$($mount.SmbSharePath)'",
+                    $('-' * 30)
+                )
+
+                Out-File @outFileParams -InputObject (
+                    $header + $logFileMessages
+                )
+            }
+            #endregion
         }
     }
 }
