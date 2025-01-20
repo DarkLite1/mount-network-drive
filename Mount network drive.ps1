@@ -13,10 +13,23 @@
     .PARAMETER ImportFile
         A .JSON file that contains all the parameters used by the script.
 
-    .PARAMETER DriveLetter
+    .PARAMETER Credential.UserName
+        User name used to mount the drive.
+
+        When UserName is blank, the drive is mounted under the current user,
+        without extra authentication.
+
+    .PARAMETER Credential.Password
+        Password used to mount the drive.
+
+        When Password starts with the string 'ENV:', the password is retrieved
+        from the environment variables. When the 'ENV:' prefix is not there, it
+        is assumed the password is in plain text in the ImportFile.
+
+    .PARAMETER Mount.DriveLetter
         Drive letter to mount the drive.
 
-    .PARAMETER SmbSharePath
+    .PARAMETER Mount.SmbSharePath
         Network path to the folder.
 
     .PARAMETER LogFolder
