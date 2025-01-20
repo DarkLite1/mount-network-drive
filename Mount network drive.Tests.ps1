@@ -161,4 +161,4 @@ Describe 'when the drive is mounted' {
     It 'do not create a log file' {
         Should -Not -Invoke Out-File -Scope Describe
     }
-}  -Tag test
+}
