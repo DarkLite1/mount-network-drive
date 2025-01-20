@@ -111,23 +111,17 @@ Describe 'create a log file with an error line when' {
     }
 }
 Describe 'when no drive is mounted' {
-    It 'mount the drive' {
-        Mock Get-WmiObject {
-            # @{
-            #     VolumeName   = 'SharedDrive'
-            #     DeviceID     = $testInputFile.Mount[0].DriveLetter
-            #     DriveType    = 4
-            #     ProviderName = $testInputFile.Mount[0].SmbSharePath
-            # }
-        }
+    BeforeAll {
+        Mock Get-WmiObject
 
         & $realCmdLet.OutFile @testOutParams -InputObject (
             $testInputFile | ConvertTo-Json -Depth 7
         )
 
         .$testScript @testParams
-
-        Should -Invoke New-PSDrive -Exactly -Times 1 -ParameterFilter {
+    }
+    It 'mount the drive' {
+        Should -Invoke New-PSDrive -Exactly -Times 1 -Scope Describe -ParameterFilter {
             ($Name -eq $testInputFile.Mount[0].DriveLetter.TrimEnd(':')) -and
             ($Root -eq $testInputFile.Mount[0].SmbSharePath) -and
             ($PSProvider -eq 'FileSystem') -and
@@ -135,6 +129,11 @@ Describe 'when no drive is mounted' {
             ($Persist -eq $true)
         }
     }
+    It 'create log file' {
+        Should -Invoke Out-File -Exactly 1 -Scope Describe -ParameterFilter {
+            $InputObject -like "*Mount drive '$($testInputFile.Mount[0].DriveLetter)' to '$($testInputFile.Mount[0].SmbSharePath)'*"
+        }
+    }  -Tag test
 }
 Describe 'when the drive is mounted' {
     It 'do not mount the drive again' {
@@ -157,5 +156,5 @@ Describe 'when the drive is mounted' {
         .$testScript @testParams
 
         Should -Not -Invoke New-PSDrive
-    } -Tag test
+    }
 }
