@@ -183,6 +183,10 @@ Begin {
         }
         #endregion
 
+        $Mounts = $jsonFileContent.Mount
+        $UserName = $jsonFileContent.Credential.UserName
+        $Password = $jsonFileContent.Credential.Password
+
         #region Test .json file properties
         Write-Verbose 'Test .json file properties'
 
@@ -194,8 +198,6 @@ Begin {
             ).foreach(
                 { throw "Property '$_' not found" }
             )
-
-            $Mounts = $jsonFileContent.Mount
 
             foreach ($mount in $Mounts) {
                 @(
@@ -214,6 +216,14 @@ Begin {
                 throw "Property 'Mount.DriveLetter' with value '$($_.Name)' is not unique. Each drive letter needs to be unique."
             }
             #endregion
+
+            #region Test Credential.Password
+            if ($UserName) {
+                if (-not $Password) {
+                    throw "Property 'Credential.Password' not found for 'Credential.UserName' with value '$UserName'. If you do not want to use authentication, leave Credential.UserName blank."
+                }
+            }
+            #endregion
         }
         catch {
             throw "Input file '$ImportFile': $_"
@@ -223,21 +233,14 @@ Begin {
         #region Get credential
         $credential = $null
 
-        $userName = $jsonFileContent.Credential.UserName
-        $password = $jsonFileContent.Credential.Password
-
-        if ($userName) {
-            if (-not $password) {
-                throw "Property 'Credential.Password' not found for 'Credential.UserName' with value '$userName'"
-            }
-
-            $securePassword = Get-SecurePasswordHC -Name $password
+        if ($UserName) {
+            $securePassword = Get-SecurePasswordHC -Name $Password
 
             Write-Verbose 'Create secure credential object'
 
             $params = @{
                 TypeName     = 'System.Management.Automation.PSCredential'
-                ArgumentList = $userName, $securePassword
+                ArgumentList = $UserName, $securePassword
             }
             $credential = New-Object @params
         }

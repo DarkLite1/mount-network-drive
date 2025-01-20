@@ -102,7 +102,7 @@ Describe 'create a log file with an error line when' {
                 .$testScript @testParams
 
                 Should -Invoke Out-File -Exactly 1 -ParameterFilter {
-                    $InputObject -like "*ERROR: Property 'Credential.Password' not found for 'Credential.UserName' with value 'Bob'*"
+                    $InputObject -like "*ERROR*Property 'Credential.Password' not found for 'Credential.UserName' with value 'Bob'*"
                 }
             }
         }
