@@ -59,7 +59,7 @@ Begin {
                 }
             }
 
-            if (-not ($Drive.ProviderName -ne $SmbSharePath)) {
+            if ($Drive.ProviderName -ne $SmbSharePath) {
                 return @{
                     isMounted = $false
                     reason    = "Logical disk ProviderName '$($Drive.ProviderName)' does not match SmbSharePath '$SmbSharePath'"

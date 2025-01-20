@@ -115,7 +115,8 @@ Describe 'when no drive is mounted' {
         Mock Get-WmiObject {
             @{
                 Name      = 'CD Rom'
-                DriveType = 5
+                DeviceID  = $testInputFile.Mount[0].DriveLetter
+                DriveType = 4
             }
         }
     }
