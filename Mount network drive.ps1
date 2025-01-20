@@ -37,6 +37,8 @@ Param (
 Begin {
     $ErrorActionPreference = 'Stop'
 
+    $date = Get-Date
+
     $logFileMessages = @()
 
     Function Test-isDriveMountedHC {
@@ -287,10 +289,11 @@ Process {
                 Write-Verbose 'Create log file'
 
                 $header = @(
-                    $('-' * 30),
+                    '', "$('_' * 15)  $ScriptName $('_' * 15) ", '',
+                    "- DateTime     : '$(($date).ToString('dd/MM/yyyy HH:mm:ss'))'",
                     "- DriveLetter  : '$DriveLetter'",
                     "- SmbSharePath : '$SmbSharePath'",
-                    $('-' * 30)
+                    $('_' * 52), ''
                 )
 
                 Out-File @outFileParams -InputObject (
