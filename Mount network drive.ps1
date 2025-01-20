@@ -41,6 +41,38 @@ Begin {
 
     $logFileMessages = @()
 
+    Function Get-SecurePasswordHC {
+        Param(
+            [parameter(Mandatory)]
+            [String]$Name
+        )
+
+        try {
+            $plainPassword = $Name
+
+            if ($name.StartsWith('ENV:')) {
+                Write-Verbose "Retrieve environment variable '$Name'"
+
+                $plainPassword = [Environment]::GetEnvironmentVariable(
+                    $Name.Substring(4)
+                )
+            }
+
+            Write-Verbose 'Convert password to secure string'
+
+            $params = @{
+                String      = $plainPassword
+                AsPlainText = $true
+                Force       = $true
+                ErrorAction = 'Stop'
+            }
+            ConvertTo-SecureString @params
+        }
+        catch {
+            throw "Failed to get the password '$Name': $_"
+        }
+    }
+
     Function Test-isDriveMountedHC {
         [CmdLetBinding()]
         Param (
@@ -170,6 +202,29 @@ Begin {
             throw "Input file '$ImportFile': $_"
         }
         #endregion
+
+        #region Get credential
+        $credential = $null
+
+        $userName = $jsonFileContent.Credential.UserName
+        $password = $jsonFileContent.Credential.Password
+
+        if ($userName) {
+            if (-not $password) {
+                throw "Property 'Credential.Password' not found for 'Credential.UserName' with value '$userName'"
+            }
+
+            $securePassword = Get-SecurePasswordHC -Name $password
+
+            Write-Verbose 'Create secure credential object'
+
+            $params = @{
+                TypeName     = 'System.Management.Automation.PSCredential'
+                ArgumentList = $userName, $securePassword
+            }
+            $credential = New-Object @params
+        }
+        #endregion
     }
     catch {
         $M = "ERROR: $_"
@@ -250,6 +305,11 @@ Process {
                     Root       = $SmbSharePath
                     Persist    = $true
                 }
+
+                if ($credential) {
+                    $params.Credential = $credential
+                }
+
                 New-PSDrive @params
             }
             catch {

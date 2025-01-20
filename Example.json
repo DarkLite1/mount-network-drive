@@ -1,8 +1,18 @@
 {
+  "Credential": {
+    "UserName": "bob",
+    "Password": "ENV:superSecretPassword"
+  },
   "Mount": [
     {
       "DriveLetter": "Z:",
       "SmbSharePath": "\\\\10.10.10.1\\Documents"
     }
-  ]
+  ],
+  "?" : {
+    "Credential" : {
+      "UserName" : "when empty, no credentials are used to mount the drive",
+      "Password" : "when starting with 'ENV:' the password is retrieved from the environment variables (ex. '$ENV:TEMP'). When not using the prefix 'ENV:', the password is in plain text and not storeds as an environment variables."
+    }
+  }
 }
