@@ -50,8 +50,6 @@ Begin {
         )
 
         try {
-            Write-Verbose 'Test if drive is mounted'
-
             if (-not $Drive) {
                 return @{
                     isMounted = $false
@@ -187,6 +185,7 @@ Process {
             $DriveLetter = $mount.DriveLetter
             $SmbSharePath = $mount.SmbSharePath
 
+            #region Test if drive is mounted
             $drive = Get-WmiObject -Class 'Win32_LogicalDisk' | Where-Object {
                 $_.DeviceID -eq $DriveLetter
             }
@@ -195,19 +194,22 @@ Process {
                 throw "Drive letter '$DriveLetter' is already in use by drive '$($drive.VolumeName)' of DriveType '$($drive.DriveType)'. This is not a network drive."
             }
 
+            Write-Verbose 'Test drive mounted'
+
             $params = @{
                 Drive        = $drive
                 DriveLetter  = $DriveLetter
                 SmbSharePath = $SmbSharePath
             }
             $isDriveMounted = Test-isDriveMountedHC @params
+            #endregion
 
             if ($isDriveMounted.isMounted) {
                 Write-Verbose "Drive '$DriveLetter' is mounted"
                 Continue
             }
 
-            #region Verbose
+            #region Verbose drive not mounted
             $M = 'Drive not mounted'
             Write-Verbose $M; $logFileMessages += $M
 
@@ -249,7 +251,7 @@ Process {
                 New-PSDrive @params
             }
             catch {
-                throw "Failed to map drive '$DriveLetter': $_"
+                throw "Failed to mount drive '$DriveLetter': $_"
             }
             #endregion
 
