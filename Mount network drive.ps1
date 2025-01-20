@@ -221,7 +221,12 @@ Process {
                     $M = 'Remove existing drive'
                     Write-Verbose $M; $logFileMessages += $M
 
-                    Remove-PSDrive -Name $DriveLetter.TrimEnd(':') -Force
+                    $params = @{
+                        Name  = $DriveLetter.TrimEnd(':')
+                        Scope = 'Global'
+                        Force = $true
+                    }
+                    Remove-PSDrive @params
                 }
                 catch {
                     throw "Failed to remove mounted drive '$DriveLetter': $_"
