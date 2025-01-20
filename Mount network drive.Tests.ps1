@@ -43,7 +43,7 @@ Describe 'when the script is executed' {
         $testParams.LogFolder | Should -Exist
     }
 }
-Describe 'create a log file when' {
+Describe 'create a log file with an error line when' {
     Context 'the ImportFile' {
         It 'is not found' {
             $testNewParams = Copy-ObjectHC $testParams
@@ -90,16 +90,33 @@ Describe 'create a log file when' {
             }
         }
     }
-    Context 'the drive' {
-        It 'is not mapped' {
+    It 'DriveLetter is already in use by a non network drive' {
+        Mock Get-WmiObject {
+            @{
+                Name      = 'CD Rom'
+                DeviceID  = $testInputFile.Mount[0].DriveLetter
+                DriveType = 5
+            }
+        }
 
+        & $realCmdLet.OutFile @testOutParams -InputObject (
+            $testInputFile | ConvertTo-Json -Depth 7
+        )
+
+        .$testScript @testParams
+
+        Should -Invoke Out-File -Exactly 1 -ParameterFilter {
+            $InputObject -like "*Drive letter '$($testInputFile.Mount[0].DriveLetter)' is already in use by drive 'CD Rom' of DriveType '5'. This is not a network drive*"
         }
     } -Tag test
 }
-
-
 Describe 'when no drive is mounted' {
     It 'mount the drive' {
-
+        Mock Get-WmiObject {
+            @{
+                Name      = 'CD Rom'
+                DriveType = 5
+            }
+        }
     }
 }
