@@ -56,6 +56,10 @@ Begin {
                 $plainPassword = [Environment]::GetEnvironmentVariable(
                     $Name.Substring(4)
                 )
+
+                if (-not $plainPassword) {
+                    throw "No environment variable found with name '$($Name.Substring(4))'"
+                }
             }
 
             Write-Verbose 'Convert password to secure string'

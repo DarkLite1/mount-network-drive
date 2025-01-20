@@ -104,7 +104,7 @@ Describe 'create a log file with an error line when' {
                 Should -Invoke Out-File -Exactly 1 -ParameterFilter {
                     $InputObject -like "*ERROR: Property 'Credential.Password' not found for 'Credential.UserName' with value 'Bob'*"
                 }
-            } -Tag test
+            }
         }
     }
     It 'DriveLetter is already in use by a non network drive' {
@@ -178,5 +178,26 @@ Describe 'when the drive is mounted' {
     }
     It 'do not create a log file' {
         Should -Not -Invoke Out-File -Scope Describe
+    }
+}
+Describe 'user credentials to mount the drive when Credentials are given' {
+    it 'call New-PSDrive with Credential' {
+        Mock Get-WmiObject
+
+        $testNewInputFile = Copy-ObjectHC $testInputFile
+        $testNewInputFile.Credential = @{
+            UserName = 'Bob'
+            Password = 'testPassword'
+        }
+
+        & $realCmdLet.OutFile @testOutParams -InputObject (
+            $testNewInputFile | ConvertTo-Json -Depth 7
+        )
+
+        .$testScript @testParams
+
+        Should -Invoke New-PSDrive -Times 1 -Exactly -ParameterFilter {
+            $Credential -ne $null
+        }
     }
 }
