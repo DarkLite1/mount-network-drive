@@ -4,11 +4,13 @@
         Mount a network drive on the local client.
 
     .DESCRIPTION
-        This script is intended to run as a scheduled task that will run every
-        x minutes. When a drive is no longer mounted an attempt is made to mount
-        the drive again.
+        This script is intended to run as a scheduled task that will be
+        triggered to run every 5 minutes. The script will check every 5
+        minutes if a network drive is still mounted, if it is not, it will
+        mount the drive again.
 
-        When a drive is mounted again or fails to mount, a log file is created.
+        In case a drive is no longer mounted, the script will log all actions
+        to a log file in the log folder.
 
     .PARAMETER ImportFile
         A .JSON file that contains all the parameters used by the script.
