@@ -143,7 +143,26 @@ Describe 'create a log file with an error line when' {
                     Should -Invoke Out-File -Exactly 1 -ParameterFilter {
                         $InputObject -like "*Property 'Mount.DriveLetter' with value '$($testInputFile.Mount[0].DriveLetter)' is not unique. Each drive letter needs to be unique*"
                     }
-                } -Tag test
+                }
+                It 'DriveLetter is missing semicolon' {
+                    $testNewInputFile = Copy-ObjectHC $testInputFile
+                    $testNewInputFile.Mount = @(
+                        @{
+                            DriveLetter  = 'Z'
+                            SmbSharePath = $testInputFile.Mount[0].SmbSharePath
+                        }
+                    )
+
+                    & $realCmdLet.OutFile @testOutParams -InputObject (
+                        $testNewInputFile | ConvertTo-Json -Depth 7
+                    )
+
+                    .$testScript @testParams
+
+                    Should -Invoke Out-File -Exactly 1 -ParameterFilter {
+                        $InputObject -like "*Property 'Mount.DriveLetter' with value 'Z' is not a valid drive letter. Drive letter needs to be in the format 'X:'*"
+                    }
+                }
             }
         }
     }

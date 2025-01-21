@@ -213,11 +213,19 @@ Begin {
             }
             #endregion
 
-            #region Test unique DriveLetter
+            #region Test DriveLetter unique
             $Mounts.DriveLetter | Group-Object | Where-Object {
                 $_.Count -gt 1
             } | ForEach-Object {
                 throw "Property 'Mount.DriveLetter' with value '$($_.Name)' is not unique. Each drive letter needs to be unique."
+            }
+            #endregion
+
+            #region Test DriveLetter format
+            $Mounts.DriveLetter | ForEach-Object {
+                if (-not ($_ -match '^[A-Z]:$')) {
+                    throw "Property 'Mount.DriveLetter' with value '$_' is not a valid drive letter. Drive letter needs to be in the format 'X:'"
+                }
             }
             #endregion
 
