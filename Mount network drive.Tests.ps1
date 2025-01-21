@@ -88,45 +88,48 @@ Describe 'create a log file with an error line when' {
                     $InputObject -like "*$ImportFile*Property 'Mount.$_' not found*"
                 }
             }
-            It 'Credential.Password is missing when Credential.UserName is used' {
-                $testNewInputFile = Copy-ObjectHC $testInputFile
-                $testNewInputFile.Credential = @{
-                    UserName = 'Bob'
-                    Password = $null
+            Context 'Credential' {
+                It 'Credential.Password is missing when Credential.UserName is used' {
+                    $testNewInputFile = Copy-ObjectHC $testInputFile
+                    $testNewInputFile.Credential = @{
+                        UserName = 'Bob'
+                        Password = $null
+                    }
+
+                    & $realCmdLet.OutFile @testOutParams -InputObject (
+                        $testNewInputFile | ConvertTo-Json -Depth 7
+                    )
+
+                    .$testScript @testParams
+
+                    Should -Invoke Out-File -Exactly 1 -ParameterFilter {
+                        $InputObject -like "*ERROR*Property 'Credential.Password' not found for 'Credential.UserName' with value 'Bob'*"
+                    }
                 }
+            }
+            Context 'DriveLetter' {
+                It 'DriveLetter is already in use by a non network drive' {
+                    Mock Get-WmiObject {
+                        @{
+                            VolumeName = 'CD Rom'
+                            DeviceID   = $testInputFile.Mount[0].DriveLetter
+                            DriveType  = 5
+                        }
+                    }
 
-                & $realCmdLet.OutFile @testOutParams -InputObject (
-                    $testNewInputFile | ConvertTo-Json -Depth 7
-                )
+                    & $realCmdLet.OutFile @testOutParams -InputObject (
+                        $testInputFile | ConvertTo-Json -Depth 7
+                    )
 
-                .$testScript @testParams
+                    .$testScript @testParams
 
-                Should -Invoke Out-File -Exactly 1 -ParameterFilter {
-                    $InputObject -like "*ERROR*Property 'Credential.Password' not found for 'Credential.UserName' with value 'Bob'*"
+                    Should -Invoke Out-File -Exactly 1 -ParameterFilter {
+                        $InputObject -like "*Drive letter '$($testInputFile.Mount[0].DriveLetter)' is already in use by drive 'CD Rom' of DriveType '5'. This is not a network drive*"
+                    }
                 }
             }
         }
     }
-    It 'DriveLetter is already in use by a non network drive' {
-        Mock Get-WmiObject {
-            @{
-                VolumeName = 'CD Rom'
-                DeviceID   = $testInputFile.Mount[0].DriveLetter
-                DriveType  = 5
-            }
-        }
-
-        & $realCmdLet.OutFile @testOutParams -InputObject (
-            $testInputFile | ConvertTo-Json -Depth 7
-        )
-
-        .$testScript @testParams
-
-        Should -Invoke Out-File -Exactly 1 -ParameterFilter {
-            $InputObject -like "*Drive letter '$($testInputFile.Mount[0].DriveLetter)' is already in use by drive 'CD Rom' of DriveType '5'. This is not a network drive*"
-        }
-    }
-
 }
 Describe 'when no drive is mounted' {
     BeforeAll {
@@ -181,7 +184,7 @@ Describe 'when the drive is mounted' {
     }
 }
 Describe 'user credentials to mount the drive when Credentials are given' {
-    it 'call New-PSDrive with Credential' {
+    It 'call New-PSDrive with Credential' {
         Mock Get-WmiObject
 
         $testNewInputFile = Copy-ObjectHC $testInputFile
