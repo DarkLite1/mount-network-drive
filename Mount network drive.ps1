@@ -15,24 +15,24 @@
     .PARAMETER ImportFile
         A .JSON file that contains all the parameters used by the script.
 
-    .PARAMETER Credential.UserName
+    .PARAMETER Mount.Drive.Letter
+        Drive letter to mount the drive.
+
+    .PARAMETER Mount.Drive.Path
+        Network path to the folder.
+
+    .PARAMETER Mount.Credential.UserName
         User name used to mount the drive.
 
         When UserName is blank, the drive is mounted under the current user,
         without extra authentication.
 
-    .PARAMETER Credential.Password
+    .PARAMETER Mount.Credential.Password
         Password used to mount the drive.
 
         When Password starts with the string 'ENV:', the password is retrieved
         from the environment variables. When the 'ENV:' prefix is not there, it
         is assumed the password is in plain text in the ImportFile.
-
-    .PARAMETER Mount.DriveLetter
-        Drive letter to mount the drive.
-
-    .PARAMETER Mount.SmbSharePath
-        Network path to the folder.
 
     .PARAMETER LogFolder
         Path to the log folder
@@ -98,7 +98,7 @@ Begin {
             [parameter(Mandatory)]
             [String]$DriveLetter,
             [parameter(Mandatory)]
-            [String]$SmbSharePath,
+            [String]$NetworkPath,
             $Drive
         )
 
@@ -110,10 +110,10 @@ Begin {
                 }
             }
 
-            if ($Drive.ProviderName -ne $SmbSharePath) {
+            if ($Drive.ProviderName -ne $NetworkPath) {
                 return @{
                     isMounted = $false
-                    reason    = "Logical disk ProviderName '$($Drive.ProviderName)' does not match SmbSharePath '$SmbSharePath'"
+                    reason    = "Logical disk ProviderName '$($Drive.ProviderName)' does not match NetworkPath '$NetworkPath'"
                 }
             }
 
@@ -124,10 +124,10 @@ Begin {
                 }
             }
 
-            if (-not (Test-Path $SmbSharePath)) {
+            if (-not (Test-Path $NetworkPath)) {
                 return @{
                     isMounted = $false
-                    reason    = "Network path '$SmbSharePath' does not exist"
+                    reason    = "Network path '$NetworkPath' does not exist"
                 }
             }
 
@@ -186,8 +186,6 @@ Begin {
         #endregion
 
         $Mounts = $jsonFileContent.Mount
-        $UserName = $jsonFileContent.Credential.UserName
-        $Password = $jsonFileContent.Credential.Password
 
         #region Test .json file properties
         Write-Verbose 'Test .json file properties'
@@ -204,36 +202,44 @@ Begin {
 
             foreach ($mount in $Mounts) {
                 @(
-                    'DriveLetter', 'SmbSharePath'
+                    'Drive'
                 ).where(
                     { -not $mount.$_ }
                 ).foreach(
                     { throw "Property 'Mount.$_' not found" }
                 )
+
+                @(
+                    'Letter', 'Path'
+                ).where(
+                    { -not $mount.Drive.$_ }
+                ).foreach(
+                    { throw "Property 'Mount.Drive.$_' not found" }
+                )
             }
             #endregion
 
             #region Test DriveLetter unique
-            $Mounts.DriveLetter | Group-Object | Where-Object {
+            $Mounts.Drive.Letter | Group-Object | Where-Object {
                 $_.Count -gt 1
             } | ForEach-Object {
-                throw "Property 'Mount.DriveLetter' with value '$($_.Name)' is not unique. Each drive letter needs to be unique."
+                throw "Property 'Mount.Drive.Letter' with value '$($_.Name)' is not unique. Each drive letter needs to be unique."
             }
             #endregion
 
-            #region Test DriveLetter format
-            $Mounts.DriveLetter | ForEach-Object {
+            #region Test Drive.Letter format
+            $Mounts.Drive.Letter | ForEach-Object {
                 if (-not ($_ -match '^[A-Z]:$')) {
-                    throw "Property 'Mount.DriveLetter' with value '$_' is not a valid drive letter. Drive letter needs to be in the format 'X:'"
+                    throw "Property 'Mount.Drive.Letter' with value '$_' is not a valid drive letter. Drive letter needs to be in the format 'X:'"
                 }
             }
             #endregion
 
-            #region Test Credential.Password
-            if ($UserName) {
-                if (-not $Password) {
-                    throw "Property 'Credential.Password' not found for 'Credential.UserName' with value '$UserName'. If you do not want to use authentication, leave Credential.UserName blank."
-                }
+            #region Test Mount.Credential.Password
+            $Mounts.Credential | Where-Object {
+                ($_.UserName) -and (-not ($_.Password))
+            } | ForEach-Object {
+                throw "Property 'Mount.Credential.Password' not found for 'Mount.Credential.UserName' with value '$($_.UserName)'. If you do not want to use authentication, leave 'Mount.Credential.UserName' blank."
             }
             #endregion
         }
@@ -243,18 +249,25 @@ Begin {
         #endregion
 
         #region Get credential
-        $credential = $null
+        foreach ($mount in $Mounts) {
+            $userName = $mount.Credential.UserName
 
-        if ($UserName) {
-            $securePassword = Get-SecurePasswordHC -Name $Password
-
-            Write-Verbose 'Create secure credential object'
-
-            $params = @{
-                TypeName     = 'System.Management.Automation.PSCredential'
-                ArgumentList = $UserName, $securePassword
+            $mount | Add-Member -NotePropertyMembers @{
+                CredentialObject = $null
             }
-            $credential = New-Object @params
+
+            if ($userName) {
+                $password = $mount.Credential.Password
+                $securePassword = Get-SecurePasswordHC -Name $password
+
+                Write-Verbose 'Create secure credential object'
+
+                $params = @{
+                    TypeName     = 'System.Management.Automation.PSCredential'
+                    ArgumentList = $userName, $securePassword
+                }
+                $mount.CredentialObject = New-Object @params
+            }
         }
         #endregion
     }
@@ -271,30 +284,31 @@ Process {
         try {
             $logFileMessages = @()
 
-            $DriveLetter = $mount.DriveLetter
-            $SmbSharePath = $mount.SmbSharePath
+            $driveLetter = $mount.Drive.Letter
+            $networkPath = $mount.Drive.Path
+            $credential = $mount.CredentialObject
 
             #region Test if drive is mounted
             $drive = Get-WmiObject -Class 'Win32_LogicalDisk' | Where-Object {
-                $_.DeviceID -eq $DriveLetter
+                $_.DeviceID -eq $driveLetter
             }
 
             if ($drive -and ($drive.DriveType -ne 4)) {
-                throw "Drive letter '$DriveLetter' is already in use by drive '$($drive.VolumeName)' of DriveType '$($drive.DriveType)'. This is not a network drive."
+                throw "Drive letter '$driveLetter' is already in use by drive '$($drive.VolumeName)' of DriveType '$($drive.DriveType)'. This is not a network drive."
             }
 
             Write-Verbose 'Test drive mounted'
 
             $params = @{
                 Drive        = $drive
-                DriveLetter  = $DriveLetter
-                SmbSharePath = $SmbSharePath
+                DriveLetter  = $driveLetter
+                NetworkPath = $networkPath
             }
             $isDriveMounted = Test-isDriveMountedHC @params
             #endregion
 
             if ($isDriveMounted.isMounted) {
-                Write-Verbose "Drive '$DriveLetter' is mounted"
+                Write-Verbose "Drive '$driveLetter' is mounted"
                 Continue
             }
 
@@ -313,28 +327,28 @@ Process {
                     Write-Verbose $M; $logFileMessages += $M
 
                     $params = @{
-                        Name  = $DriveLetter.TrimEnd(':')
+                        Name  = $driveLetter.TrimEnd(':')
                         Scope = 'Global'
                         Force = $true
                     }
                     Remove-PSDrive @params
                 }
                 catch {
-                    throw "Failed to remove mounted drive '$DriveLetter': $_"
+                    throw "Failed to remove mounted drive '$driveLetter': $_"
                 }
             }
             #endregion
 
             #region Mount drive
             try {
-                $M = "Mount drive '$DriveLetter' to '$SmbSharePath'"
+                $M = "Mount drive '$driveLetter' to '$networkPath'"
                 Write-Verbose $M; $logFileMessages += $M
 
                 $params = @{
-                    Name       = $DriveLetter.TrimEnd(':')
+                    Name       = $driveLetter.TrimEnd(':')
                     PSProvider = 'FileSystem'
                     Scope      = 'Global'
-                    Root       = $SmbSharePath
+                    Root       = $networkPath
                     Persist    = $true
                 }
 
@@ -345,7 +359,7 @@ Process {
                 New-PSDrive @params
             }
             catch {
-                throw "Failed to mount drive '$DriveLetter': $_"
+                throw "Failed to mount drive '$driveLetter': $_"
             }
             #endregion
 
@@ -354,12 +368,12 @@ Process {
             Write-Verbose $M; $logFileMessages += $M
 
             $drive = Get-WmiObject -Class 'Win32_LogicalDisk' |
-            Where-Object { $_.DeviceID -eq $DriveLetter }
+            Where-Object { $_.DeviceID -eq $driveLetter }
 
             $params = @{
                 Drive        = $drive
-                DriveLetter  = $DriveLetter
-                SmbSharePath = $SmbSharePath
+                DriveLetter  = $driveLetter
+                NetworkPath = $networkPath
             }
             $isDriveMounted = Test-isDriveMountedHC @params
 
@@ -385,8 +399,8 @@ Process {
                     "- DateTime     : '$(($date).ToString('dd/MM/yyyy HH:mm:ss'))'",
                     "- ImportFile   : '$ImportFile'",
                     "- ScriptFile   : '$PSCommandPath'",
-                    "- DriveLetter  : '$DriveLetter'",
-                    "- SmbSharePath : '$SmbSharePath'",
+                    "- DriveLetter  : '$driveLetter'",
+                    "- NetworkPath : '$networkPath'",
                     $('_' * 52), ''
                 )
 

@@ -9,8 +9,10 @@ BeforeAll {
     $testInputFile = @{
         Mount = @(
             @{
-                DriveLetter  = 'Z:'
-                SmbSharePath = '\\10.10.10.1\Documents'
+                Drive = @{
+                    Letter = 'Z:'
+                    Path   = '\\10.10.10.1\Documents'
+                }
             }
         )
     }
@@ -73,7 +75,7 @@ Describe 'create a log file with an error line when' {
                 }
             }
             It 'Mount.<_> not found' -ForEach @(
-                'DriveLetter', 'SmbSharePath'
+                'Drive'
             ) {
                 $testNewInputFile = Copy-ObjectHC $testInputFile
                 $testNewInputFile.Mount[0].$_ = $null
@@ -88,10 +90,26 @@ Describe 'create a log file with an error line when' {
                     $InputObject -like "*$ImportFile*Property 'Mount.$_' not found*"
                 }
             }
-            Context 'Credential' {
-                It 'Credential.Password is missing when Credential.UserName is used' {
+            It 'Mount.Drive.<_> not found' -ForEach @(
+                'Letter', 'Path'
+            ) {
+                $testNewInputFile = Copy-ObjectHC $testInputFile
+                $testNewInputFile.Mount[0].Drive.$_ = $null
+
+                & $realCmdLet.OutFile @testOutParams -InputObject (
+                    $testNewInputFile | ConvertTo-Json -Depth 7
+                )
+
+                .$testScript @testParams
+
+                Should -Invoke Out-File -Exactly 1 -ParameterFilter {
+                    $InputObject -like "*$ImportFile*Property 'Mount.Drive.$_' not found*"
+                }
+            }
+            Context 'Mount.Credential' {
+                It 'Mount.Credential.Password is missing when Mount.Credential.UserName is used' {
                     $testNewInputFile = Copy-ObjectHC $testInputFile
-                    $testNewInputFile.Credential = @{
+                    $testNewInputFile.Mount[0].Credential = @{
                         UserName = 'Bob'
                         Password = $null
                     }
@@ -103,16 +121,16 @@ Describe 'create a log file with an error line when' {
                     .$testScript @testParams
 
                     Should -Invoke Out-File -Exactly 1 -ParameterFilter {
-                        $InputObject -like "*ERROR*Property 'Credential.Password' not found for 'Credential.UserName' with value 'Bob'*"
+                        $InputObject -like "*ERROR*Property 'Mount.Credential.Password' not found for 'Mount.Credential.UserName' with value 'Bob'*"
                     }
                 }
             }
-            Context 'DriveLetter' {
-                It 'DriveLetter is already in use by a non network drive' {
+            Context 'Mount.Drive.Letter' {
+                It 'Mount.Drive.Letter is already in use by a non network drive' {
                     Mock Get-WmiObject {
                         @{
                             VolumeName = 'CD Rom'
-                            DeviceID   = $testInputFile.Mount[0].DriveLetter
+                            DeviceID   = $testInputFile.Mount[0].Drive.Letter
                             DriveType  = 5
                         }
                     }
@@ -124,10 +142,10 @@ Describe 'create a log file with an error line when' {
                     .$testScript @testParams
 
                     Should -Invoke Out-File -Exactly 1 -ParameterFilter {
-                        $InputObject -like "*Drive letter '$($testInputFile.Mount[0].DriveLetter)' is already in use by drive 'CD Rom' of DriveType '5'. This is not a network drive*"
+                        $InputObject -like "*Drive letter '$($testInputFile.Mount[0].Drive.Letter)' is already in use by drive 'CD Rom' of DriveType '5'. This is not a network drive*"
                     }
                 }
-                It 'DriveLetter is not unique' {
+                It 'Mount.Drive.Letter is not unique' {
                     $testNewInputFile = Copy-ObjectHC $testInputFile
                     $testNewInputFile.Mount = @(
                         Copy-ObjectHC $testInputFile.Mount[0]
@@ -141,15 +159,17 @@ Describe 'create a log file with an error line when' {
                     .$testScript @testParams
 
                     Should -Invoke Out-File -Exactly 1 -ParameterFilter {
-                        $InputObject -like "*Property 'Mount.DriveLetter' with value '$($testInputFile.Mount[0].DriveLetter)' is not unique. Each drive letter needs to be unique*"
+                        $InputObject -like "*Property 'Mount.Drive.Letter' with value '$($testInputFile.Mount[0].Drive.Letter)' is not unique. Each drive letter needs to be unique*"
                     }
                 }
-                It 'DriveLetter is missing semicolon' {
+                It 'Mount.Drive.Letter is missing semicolon' {
                     $testNewInputFile = Copy-ObjectHC $testInputFile
                     $testNewInputFile.Mount = @(
                         @{
-                            DriveLetter  = 'Z'
-                            SmbSharePath = $testInputFile.Mount[0].SmbSharePath
+                            Drive        = @{
+                                Letter = 'Z'
+                                Path = $testInputFile.Mount[0].Drive.Path
+                            }
                         }
                     )
 
@@ -160,7 +180,7 @@ Describe 'create a log file with an error line when' {
                     .$testScript @testParams
 
                     Should -Invoke Out-File -Exactly 1 -ParameterFilter {
-                        $InputObject -like "*Property 'Mount.DriveLetter' with value 'Z' is not a valid drive letter. Drive letter needs to be in the format 'X:'*"
+                        $InputObject -like "*Property 'Mount.Drive.Letter' with value 'Z' is not a valid drive letter. Drive letter needs to be in the format 'X:'*"
                     }
                 }
             }
@@ -179,8 +199,8 @@ Describe 'when no drive is mounted' {
     }
     It 'mount the drive' {
         Should -Invoke New-PSDrive -Exactly -Times 1 -Scope Describe -ParameterFilter {
-            ($Name -eq $testInputFile.Mount[0].DriveLetter.TrimEnd(':')) -and
-            ($Root -eq $testInputFile.Mount[0].SmbSharePath) -and
+            ($Name -eq $testInputFile.Mount[0].Drive.Letter.TrimEnd(':')) -and
+            ($Root -eq $testInputFile.Mount[0].Drive.Path) -and
             ($PSProvider -eq 'FileSystem') -and
             ($Scope -eq 'Global') -and
             ($Persist -eq $true)
@@ -188,7 +208,7 @@ Describe 'when no drive is mounted' {
     }
     It 'create log file' {
         Should -Invoke Out-File -Exactly 1 -Scope Describe -ParameterFilter {
-            $InputObject -like "*Mount drive '$($testInputFile.Mount[0].DriveLetter)' to '$($testInputFile.Mount[0].SmbSharePath)'*"
+            $InputObject -like "*Mount drive '$($testInputFile.Mount[0].Drive.Letter)' to '$($testInputFile.Mount[0].Drive.Path)'*"
         }
     }
 }
@@ -197,9 +217,9 @@ Describe 'when the drive is mounted' {
         Mock Get-WmiObject {
             @{
                 VolumeName   = 'SharedDrive'
-                DeviceID     = $testInputFile.Mount[0].DriveLetter
+                DeviceID     = $testInputFile.Mount[0].Drive.Letter
                 DriveType    = 4
-                ProviderName = $testInputFile.Mount[0].SmbSharePath
+                ProviderName = $testInputFile.Mount[0].Drive.Path
             }
         }
         Mock Test-Path {
@@ -219,12 +239,12 @@ Describe 'when the drive is mounted' {
         Should -Not -Invoke Out-File -Scope Describe
     }
 }
-Describe 'user credentials to mount the drive when Credentials are given' {
+Describe 'use credential to mount the drive when mount.credential is used' {
     It 'call New-PSDrive with Credential' {
         Mock Get-WmiObject
 
         $testNewInputFile = Copy-ObjectHC $testInputFile
-        $testNewInputFile.Credential = @{
+        $testNewInputFile.Mount[0].Credential = @{
             UserName = 'Bob'
             Password = 'testPassword'
         }
