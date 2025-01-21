@@ -127,6 +127,23 @@ Describe 'create a log file with an error line when' {
                         $InputObject -like "*Drive letter '$($testInputFile.Mount[0].DriveLetter)' is already in use by drive 'CD Rom' of DriveType '5'. This is not a network drive*"
                     }
                 }
+                It 'DriveLetter is not unique' {
+                    $testNewInputFile = Copy-ObjectHC $testInputFile
+                    $testNewInputFile.Mount = @(
+                        Copy-ObjectHC $testInputFile.Mount[0]
+                        Copy-ObjectHC $testInputFile.Mount[0]
+                    )
+
+                    & $realCmdLet.OutFile @testOutParams -InputObject (
+                        $testNewInputFile | ConvertTo-Json -Depth 7
+                    )
+
+                    .$testScript @testParams
+
+                    Should -Invoke Out-File -Exactly 1 -ParameterFilter {
+                        $InputObject -like "*Property 'Mount.DriveLetter' with value '$($testInputFile.Mount[0].DriveLetter)' is not unique. Each drive letter needs to be unique*"
+                    }
+                } -Tag test
             }
         }
     }
